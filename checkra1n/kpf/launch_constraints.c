@@ -66,8 +66,18 @@ static bool kpf_launch_constraints_callback(struct xnu_pf_patch *patch, uint32_t
         }
     }
 
-    start[0] = 0x52800000; // mov w0, 0
-    start[1] = RET;
+    uint32_t *pacibsp = start - 1;
+    if(*pacibsp == 0xd503237f)
+    {
+        start = pacibsp;
+        start[1] = 0x52800000; // mov w0, 0
+        start[2] = 0xd65f0fff; // retab
+    }
+    else
+    {
+        start[0] = 0x52800000; // mov w0, 0
+        start[1] = RET;
+    }
 
     puts("KPF: Found launch constraints");
     return true;
@@ -126,6 +136,26 @@ static void kpf_launch_constraints_patch(xnu_pf_patchset_t *patchset)
         0xfc000000,
     };
     xnu_pf_maskmatch(patchset, "launch_constraints", matches_261b2, masks_261b2, sizeof(matches_261b2)/sizeof(uint64_t), false, (void*)kpf_launch_constraints_callback);
+
+    uint64_t matches_263[] =
+    {
+        0x90000000, // adrp x0, ...
+        0x91000000, // add  x0, x0, ...
+        0xa9400520, // ldp  x9, x8, [sp, ...]
+        0xa9007b20, // stp  x9, x27, [sp, ...]
+        0xf9000000, // str  x8, [sp, ...]
+        0x94000000, // bl   IOLog
+    };
+    uint64_t masks_263[] =
+    {
+        0x9f00001f,
+        0xffc003ff,
+        0xffc003e0,
+        0xffc0ffff,
+        0xffc003ff,
+        0xfc000000,
+    };
+    xnu_pf_maskmatch(patchset, "launch_constraints", matches_263, masks_263, sizeof(matches_263)/sizeof(uint64_t), false, (void*)kpf_launch_constraints_callback);
 }
 
 static void kpf_launch_constraints_init(struct mach_header_64 *hdr, xnu_pf_range_t *cstring)
